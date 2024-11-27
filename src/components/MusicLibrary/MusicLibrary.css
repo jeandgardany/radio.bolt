@@ -1,0 +1,39 @@
+.folders-list {
+  max-height: calc(100vh - 300px);
+  overflow-y: auto;
+  scrollbar-width: thin;
+  scrollbar-color: rgba(255, 255, 255, 0.1) transparent;
+}
+
+.folders-list::-webkit-scrollbar {
+  width: 6px;
+}
+
+.folders-list::-webkit-scrollbar-track {
+  background: transparent;
+}
+
+.folders-list::-webkit-scrollbar-thumb {
+  background-color: rgba(255, 255, 255, 0.1);
+  border-radius: 20px;
+}
+
+.songs-list {
+  max-height: calc(100vh - 250px);
+  overflow-y: auto;
+  scrollbar-width: thin;
+  scrollbar-color: rgba(255, 255, 255, 0.1) transparent;
+}
+
+.songs-list::-webkit-scrollbar {
+  width: 6px;
+}
+
+.songs-list::-webkit-scrollbar-track {
+  background: transparent;
+}
+
+.songs-list::-webkit-scrollbar-thumb {
+  background-color: rgba(255, 255, 255, 0.1);
+  border-radius: 20px;
+}

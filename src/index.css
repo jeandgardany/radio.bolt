@@ -1,0 +1,95 @@
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+@layer base {
+  body {
+    @apply bg-radio-dark text-radio-text;
+  }
+}
+
+@layer components {
+  .btn {
+    @apply px-4 py-2 rounded-lg font-medium transition-colors;
+  }
+  
+  .btn-primary {
+    @apply bg-radio-light text-white hover:bg-opacity-80;
+  }
+  
+  .btn-secondary {
+    @apply bg-radio-accent text-white hover:bg-opacity-80;
+  }
+  
+  .btn-danger {
+    @apply bg-red-500 text-white hover:bg-opacity-80;
+  }
+}
+
+/* Custom Calendar Styles */
+.react-calendar {
+  @apply bg-transparent border-0 text-radio-text w-full max-w-[280px] mx-auto;
+}
+
+.react-calendar__navigation {
+  @apply mb-4;
+}
+
+.react-calendar__navigation button {
+  @apply text-radio-text min-w-[32px] bg-radio-accent rounded-lg hover:bg-opacity-80;
+}
+
+.react-calendar__navigation button:disabled {
+  @apply opacity-50 cursor-not-allowed;
+}
+
+.react-calendar__month-view__weekdays {
+  @apply text-radio-text-secondary text-xs uppercase;
+}
+
+.react-calendar__month-view__days__day {
+  @apply text-radio-text rounded-lg hover:bg-radio-light hover:text-white;
+}
+
+.react-calendar__month-view__days__day--neighboringMonth {
+  @apply text-radio-text-secondary;
+}
+
+.react-calendar__tile {
+  @apply p-2 text-sm hover:bg-radio-light hover:text-white rounded-lg;
+}
+
+.react-calendar__tile--now {
+  @apply bg-radio-accent text-white;
+}
+
+.react-calendar__tile--active {
+  @apply bg-radio-light text-white;
+}
+
+/* Input range styling */
+input[type="range"] {
+  @apply appearance-none bg-radio-accent rounded-lg;
+  height: 4px;
+}
+
+input[type="range"]::-webkit-slider-thumb {
+  @apply appearance-none w-4 h-4 bg-radio-light rounded-full cursor-pointer;
+}
+
+input[type="range"]::-webkit-slider-thumb:hover {
+  @apply opacity-80;
+}
+
+/* Toast customization */
+.Toastify__toast {
+  @apply bg-radio-blue text-radio-text !important;
+}
+
+.Toastify__close-button {
+  @apply text-radio-text-secondary !important;
+}
+
+.Toastify__progress-bar {
+  @apply bg-radio-light !important;
+}
