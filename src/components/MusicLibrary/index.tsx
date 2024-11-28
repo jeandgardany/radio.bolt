@@ -9,8 +9,6 @@ interface Folder {
   name: string;
   path: string;
   songs: Song[];
-  createdAt?: string;
-  updatedAt?: string;
 }
 
 interface Song {
@@ -31,37 +29,19 @@ const MusicLibrary: React.FC = () => {
   const [isLoading, setIsLoading] = useState(false);
   const [searchTerm, setSearchTerm] = useState('');
 
-  const loadFolderSongs = async (folderId: number) => {
-    try {
-      const response = await fetch(`/api/folders/${folderId}/songs`);
-      if (!response.ok) throw new Error('Erro ao carregar músicas');
-      const songs = await response.json();
-      return songs;
-    } catch (error) {
-      console.error('Erro ao carregar músicas:', error);
-      toast.error('Erro ao carregar músicas');
-      return [];
-    }
-  };
-
   const loadFolders = async () => {
     setIsLoading(true);
     try {
       const response = await fetch('/api/folders');
       if (!response.ok) throw new Error('Erro ao carregar pastas');
       const data = await response.json();
-      
-      const foldersWithSongs = await Promise.all(
-        data.map(async (folder: Folder) => {
-          const songs = await loadFolderSongs(folder.id);
-          return { ...folder, songs };
-        })
-      );
-      
-      setFolders(foldersWithSongs);
+      console.log('Pastas carregadas:', data);
+      setFolders(data);
+      return data;
     } catch (error) {
       console.error('Erro ao carregar pastas:', error);
       toast.error('Erro ao carregar pastas');
+      return [];
     } finally {
       setIsLoading(false);
     }
@@ -73,16 +53,24 @@ const MusicLibrary: React.FC = () => {
 
   const handleFolderSelect = async (folder: Folder) => {
     try {
-      const songs = await loadFolderSongs(folder.id);
+      setSelectedFolder(folder); // Feedback visual imediato
+      const response = await fetch(`/api/folders/${folder.id}/songs`);
+      
+      if (!response.ok) throw new Error('Erro ao carregar músicas');
+      const songs = await response.json();
+      console.log('Músicas carregadas:', songs);
+
       const updatedFolder = { ...folder, songs };
       setSelectedFolder(updatedFolder);
       
+      // Atualiza a pasta na lista também
       setFolders(prev => prev.map(f => 
         f.id === folder.id ? updatedFolder : f
       ));
     } catch (error) {
-      console.error('Erro ao selecionar pasta:', error);
+      console.error('Erro ao carregar músicas:', error);
       toast.error('Erro ao carregar músicas da pasta');
+      setSelectedFolder(folder); // Mantém a seleção mesmo sem músicas
     }
   };
 
@@ -112,14 +100,7 @@ const MusicLibrary: React.FC = () => {
         throw new Error(error.message || 'Erro no upload');
       }
 
-      const songs = await loadFolderSongs(selectedFolder.id);
-      const updatedFolder = { ...selectedFolder, songs };
-      
-      setSelectedFolder(updatedFolder);
-      setFolders(prev => prev.map(folder => 
-        folder.id === selectedFolder.id ? updatedFolder : folder
-      ));
-
+      await handleFolderSelect(selectedFolder); // Recarrega as músicas
       toast.success(`${files.length} música(s) importada(s) com sucesso!`);
     } catch (error: any) {
       console.error('Erro no upload:', error);
@@ -128,7 +109,6 @@ const MusicLibrary: React.FC = () => {
       setIsUploading(false);
     }
   };
-
   const createFolder = async () => {
     if (!newFolderName.trim()) {
       toast.error('Nome da pasta é obrigatório');
@@ -147,8 +127,7 @@ const MusicLibrary: React.FC = () => {
         throw new Error(error.message || 'Erro ao criar pasta');
       }
 
-      const newFolder = await response.json();
-      setFolders(prev => [...prev, { ...newFolder, songs: [] }]);
+      await loadFolders(); // Recarrega todas as pastas
       setNewFolderName('');
       setShowNewFolderModal(false);
       toast.success('Pasta criada com sucesso!');
@@ -157,6 +136,7 @@ const MusicLibrary: React.FC = () => {
       toast.error(error.message);
     }
   };
+
   const updateFolder = async () => {
     if (!editingFolder || !newFolderName.trim()) {
       toast.error('Nome da pasta é obrigatório');
@@ -171,24 +151,12 @@ const MusicLibrary: React.FC = () => {
       });
 
       if (!response.ok) {
-        const errorData = await response.json();
-        throw new Error(errorData.message || 'Erro ao atualizar pasta');
+        const error = await response.json();
+        throw new Error(error.message || 'Erro ao atualizar pasta');
       }
 
-      const updatedFolder = await response.json();
-
-      // Atualiza a lista de pastas mantendo as músicas
-      setFolders(prev => prev.map(folder => 
-        folder.id === editingFolder.id
-          ? { ...updatedFolder, songs: folder.songs }
-          : folder
-      ));
-
-      // Se a pasta sendo editada é a selecionada, atualiza ela também
-      if (selectedFolder?.id === editingFolder.id) {
-        setSelectedFolder(prev => prev ? { ...prev, name: newFolderName } : null);
-      }
-
+      await loadFolders(); // Recarrega após atualizar
+      
       setEditingFolder(null);
       setNewFolderName('');
       setShowNewFolderModal(false);
@@ -206,7 +174,8 @@ const MusicLibrary: React.FC = () => {
 
     try {
       const response = await fetch(`/api/folders/${folderId}`, {
-        method: 'DELETE'
+        method: 'DELETE',
+        headers: { 'Content-Type': 'application/json' }
       });
 
       if (!response.ok) {
@@ -214,11 +183,12 @@ const MusicLibrary: React.FC = () => {
         throw new Error(error.message || 'Erro ao excluir pasta');
       }
 
+      // Limpa a seleção se a pasta excluída estava selecionada
       if (selectedFolder?.id === folderId) {
         setSelectedFolder(null);
       }
-      
-      setFolders(prev => prev.filter(folder => folder.id !== folderId));
+
+      await loadFolders(); // Recarrega após excluir
       toast.success('Pasta excluída com sucesso!');
     } catch (error: any) {
       console.error('Erro ao excluir pasta:', error);
@@ -227,9 +197,7 @@ const MusicLibrary: React.FC = () => {
   };
 
   const deleteSong = async (songId: number) => {
-    if (!selectedFolder) return;
-
-    if (!window.confirm('Tem certeza que deseja excluir esta música?')) {
+    if (!selectedFolder || !window.confirm('Tem certeza que deseja excluir esta música?')) {
       return;
     }
 
@@ -240,14 +208,7 @@ const MusicLibrary: React.FC = () => {
 
       if (!response.ok) throw new Error('Erro ao excluir música');
 
-      const songs = await loadFolderSongs(selectedFolder.id);
-      const updatedFolder = { ...selectedFolder, songs };
-      
-      setSelectedFolder(updatedFolder);
-      setFolders(prev => prev.map(folder => 
-        folder.id === selectedFolder.id ? updatedFolder : folder
-      ));
-      
+      await handleFolderSelect(selectedFolder); // Recarrega as músicas
       toast.success('Música excluída com sucesso!');
     } catch (error) {
       console.error('Erro ao excluir música:', error);
@@ -269,7 +230,11 @@ const MusicLibrary: React.FC = () => {
             <div className="flex justify-between items-center mb-6">
               <h2 className="text-xl font-bold text-radio-text">Pastas</h2>
               <button
-                onClick={() => setShowNewFolderModal(true)}
+                onClick={() => {
+                  setEditingFolder(null);
+                  setNewFolderName('');
+                  setShowNewFolderModal(true);
+                }}
                 className="flex items-center px-4 py-2 bg-radio-light text-white rounded-lg hover:bg-opacity-80 transition-colors"
                 disabled={isLoading}
               >
@@ -326,10 +291,16 @@ const MusicLibrary: React.FC = () => {
                 </div>
               ))}
 
-              {folders.length === 0 && (
+              {folders.length === 0 && !isLoading && (
                 <div className="text-center py-8 text-radio-text-secondary">
                   <p>Nenhuma pasta criada</p>
                   <p className="text-sm mt-2">Clique em "Nova Pasta" para começar</p>
+                </div>
+              )}
+
+              {isLoading && (
+                <div className="text-center py-8 text-radio-text-secondary">
+                  <p>Carregando pastas...</p>
                 </div>
               )}
             </div>
@@ -374,42 +345,37 @@ const MusicLibrary: React.FC = () => {
             </div>
 
             <div className="space-y-2 songs-list">
-              {selectedFolder?.songs
-                ?.filter(song => 
-                  song.title.toLowerCase().includes(searchTerm.toLowerCase()) ||
-                  song.artist.toLowerCase().includes(searchTerm.toLowerCase())
-                )
-                .map(song => (
-                  <div
-                    key={song.id}
-                    className="flex items-center justify-between p-4 bg-radio-accent rounded-lg hover:bg-opacity-90 transition-all"
-                  >
-                    <div className="flex items-center flex-1">
-                      <FaMusic className="text-radio-light mr-3" />
-                      <div>
-                        <h3 className="text-radio-text font-medium">{song.title}</h3>
-                        <p className="text-radio-text-secondary text-sm">
-                          {song.duration || '00:00'} • {song.artist}
-                        </p>
-                      </div>
-                    </div>
-                    <div className="flex items-center space-x-3">
-                      <button 
-                        className="p-2 text-radio-text-secondary hover:text-radio-light transition-colors"
-                        title="Reproduzir música"
-                      >
-                        <FaPlay />
-                      </button>
-                      <button 
-                        className="p-2 text-radio-text-secondary hover:text-red-400 transition-colors"
-                        onClick={() => deleteSong(song.id)}
-                        title="Excluir música"
-                      >
-                        <FaTrash />
-                      </button>
+              {selectedFolder?.songs?.map(song => (
+                <div
+                  key={song.id}
+                  className="flex items-center justify-between p-4 bg-radio-accent rounded-lg hover:bg-opacity-90 transition-all"
+                >
+                  <div className="flex items-center flex-1">
+                    <FaMusic className="text-radio-light mr-3" />
+                    <div>
+                      <h3 className="text-radio-text font-medium">{song.title}</h3>
+                      <p className="text-radio-text-secondary text-sm">
+                        {song.duration || '00:00'} • {song.artist || selectedFolder.name}
+                      </p>
                     </div>
                   </div>
-                ))}
+                  <div className="flex items-center space-x-3">
+                    <button 
+                      className="p-2 text-radio-text-secondary hover:text-radio-light transition-colors"
+                      title="Reproduzir música"
+                    >
+                      <FaPlay />
+                    </button>
+                    <button 
+                      className="p-2 text-radio-text-secondary hover:text-red-400 transition-colors"
+                      onClick={() => deleteSong(song.id)}
+                      title="Excluir música"
+                    >
+                      <FaTrash />
+                    </button>
+                  </div>
+                </div>
+              ))}
 
               {selectedFolder && (!selectedFolder.songs || selectedFolder.songs.length === 0) && (
                 <div className="text-center py-8 text-radio-text-secondary">

@@ -60,10 +60,49 @@ export const upload = multer({ storage: storage });
 // Rotas da API
 export async function handleRequest(req: CustomRequest, res: Response) {
   console.log('Requisição recebida:', req.method, req.url);
-  console.log('Parâmetros:', req.params);
-  console.log('Body:', req.body);
+  console.log('Headers:', req.headers);
 
   try {
+    // Listar músicas de uma pasta
+    if (req.url.match(/^\/api\/folders\/\d+\/songs$/) && req.method === 'GET') {
+      const folderId = req.url.split('/')[3];
+      console.log('Buscando músicas da pasta:', folderId);
+
+      const folder = await Folder.findByPk(folderId);
+      if (!folder) {
+        res.writeHead(404, { 'Content-Type': 'application/json' });
+        res.end(JSON.stringify({ error: 'Pasta não encontrada' }));
+        return;
+      }
+
+      const folderData = folder.get();
+      const folderPath = path.join(process.cwd(), 'uploads', 'music', folderData.name);
+      
+      try {
+        const files = await fs.readdir(folderPath);
+        console.log('Arquivos encontrados:', files);
+        
+        const songs = files
+          .filter(file => file.endsWith('.mp3'))
+          .map((file, index) => ({
+            id: Date.now() + index,
+            title: file.replace('.mp3', ''),
+            artist: folderData.name,
+            duration: '00:00',
+            file
+          }));
+
+        console.log('Músicas processadas:', songs);
+        res.writeHead(200, { 'Content-Type': 'application/json' });
+        res.end(JSON.stringify(songs));
+      } catch (error) {
+        console.error('Erro ao ler músicas:', error);
+        res.writeHead(500, { 'Content-Type': 'application/json' });
+        res.end(JSON.stringify({ error: 'Erro ao ler músicas' }));
+      }
+      return;
+    }
+
     // Criar pasta
     if (req.url === '/api/folders' && req.method === 'POST') {
       const { name } = req.body;
@@ -130,19 +169,62 @@ export async function handleRequest(req: CustomRequest, res: Response) {
         };
       }));
 
-      console.log('Pastas encontradas:', foldersData);
+      console.log('Pastas encontradas:', foldersData.map(f => ({ name: f.name, path: f.path })));
       
       res.writeHead(200, { 'Content-Type': 'application/json' });
       res.end(JSON.stringify(foldersData));
       return;
     }
 
-    // Excluir pasta
-    if (req.url.startsWith('/api/folders/') && req.method === 'DELETE') {
-      const urlParts = req.url.split('/');
-      const folderId = Number(urlParts[urlParts.length - 1]);
+    // Atualizar pasta
+    if (req.url.match(/^\/api\/folders\/\d+$/) && req.method === 'PUT') {
+      const folderId = req.url.split('/')[3];
+      const { name } = req.body;
+      
+      console.log('Atualizando pasta:', { id: folderId, name });
 
-      console.log('Excluindo pasta:', folderId);
+      if (!name) {
+        res.writeHead(400, { 'Content-Type': 'application/json' });
+        res.end(JSON.stringify({ error: 'Nome da pasta é obrigatório' }));
+        return;
+      }
+
+      const folder = await Folder.findByPk(folderId);
+      if (!folder) {
+        res.writeHead(404, { 'Content-Type': 'application/json' });
+        res.end(JSON.stringify({ error: 'Pasta não encontrada' }));
+        return;
+      }
+
+      const oldPath = path.join(process.cwd(), 'uploads', 'music', folder.get('name'));
+      const newPath = path.join(process.cwd(), 'uploads', 'music', name);
+
+      try {
+        // Renomeia a pasta física
+        await fs.rename(oldPath, newPath);
+        console.log('Pasta física renomeada:', { oldPath, newPath });
+        
+        // Atualiza no banco
+        const updatedFolder = await folder.update({
+          name,
+          path: path.join('uploads', 'music', name)
+        });
+
+        console.log('Pasta atualizada no banco:', updatedFolder.get());
+        res.writeHead(200, { 'Content-Type': 'application/json' });
+        res.end(JSON.stringify(updatedFolder.get()));
+      } catch (error) {
+        console.error('Erro ao atualizar pasta:', error);
+        res.writeHead(500, { 'Content-Type': 'application/json' });
+        res.end(JSON.stringify({ error: 'Erro ao atualizar pasta' }));
+      }
+      return;
+    }
+
+    // Excluir pasta
+    if (req.url.match(/^\/api\/folders\/\d+$/) && req.method === 'DELETE') {
+      const folderId = Number(req.url.split('/')[3]);
+      console.log('Tentando excluir pasta com ID:', folderId);
 
       if (!folderId || isNaN(folderId)) {
         res.writeHead(400, { 'Content-Type': 'application/json' });
@@ -157,6 +239,7 @@ export async function handleRequest(req: CustomRequest, res: Response) {
         return;
       }
 
+      console.log('Pasta encontrada:', folder.get());
       const folderData = folder.get();
       const fullPath = path.join(process.cwd(), 'uploads', 'music', folderData.name);
 
@@ -168,12 +251,17 @@ export async function handleRequest(req: CustomRequest, res: Response) {
       }
 
       await folder.destroy();
-      console.log('Registro da pasta excluído do banco');
+      console.log('Pasta excluída do banco com sucesso');
 
       res.writeHead(200, { 'Content-Type': 'application/json' });
       res.end(JSON.stringify({ message: 'Pasta excluída com sucesso', id: folderId }));
       return;
     }
+
+    // Rota não encontrada
+    res.writeHead(404, { 'Content-Type': 'application/json' });
+    res.end(JSON.stringify({ error: 'Rota não encontrada' }));
+
   } catch (error) {
     console.error('Erro na operação:', error);
     res.writeHead(500, { 'Content-Type': 'application/json' });
